@@ -1,36 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Download, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { PlusCircle, Download, TrendingUp, TrendingDown, DollarSign, Filter, X } from 'lucide-react';
 import * as Chart from 'chart.js';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-
-
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-};
-console.log("Firebase API Key: ", process.env.REACT_APP_FIREBASE_API_KEY);
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
+import { collection, addDoc, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth, provider, db } from './firebase';
 
 const ExpenseTracker = () => {
   const [transactions, setTransactions] = useState([
-    // Sample data
-    { id: 1, type: 'income', amount: 5000, category: 'Salary', description: 'Monthly salary', date: '2024-01-15' },
-    { id: 2, type: 'expense', amount: 1200, category: 'Rent', description: 'Monthly rent', date: '2024-01-01' },
-    { id: 3, type: 'expense', amount: 300, category: 'Groceries', description: 'Weekly groceries', date: '2024-01-05' },
-    { id: 4, type: 'expense', amount: 150, category: 'Utilities', description: 'Electricity bill', date: '2024-01-10' },
-    { id: 5, type: 'income', amount: 500, category: 'Freelance', description: 'Web design project', date: '2024-01-20' },
+    // Starter sample data (will be replaced once user data loads)
+    { id: 's1', type: 'income', amount: 5000, category: 'Salary', description: 'Monthly salary', date: '2024-01-15' },
+    { id: 's2', type: 'expense', amount: 1200, category: 'Rent', description: 'Monthly rent', date: '2024-01-01' },
+    { id: 's3', type: 'expense', amount: 300, category: 'Groceries', description: 'Weekly groceries', date: '2024-01-05' },
+    { id: 's4', type: 'expense', amount: 150, category: 'Utilities', description: 'Electricity bill', date: '2024-01-10' },
+    { id: 's5', type: 'income', amount: 500, category: 'Freelance', description: 'Web design project', date: '2024-01-20' },
   ]);
-
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [user, setUser] = useState(null);
   const [categoryBreakdown, setCategoryBreakdown] = useState({});
@@ -42,179 +25,196 @@ const ExpenseTracker = () => {
     amount: '',
     category: '',
     description: '',
-    date: new Date().toISOString().slice(0, 10)
+    date: new Date().toISOString().slice(0, 10),
   });
 
   const categories = {
     income: ['Salary', 'Freelance', 'Investment', 'Business', 'Other Income'],
-    expense: ['Rent', 'Groceries', 'Utilities', 'Transportation', 'Entertainment', 'Healthcare', 'Education', 'Shopping', 'Other Expense']
+    expense: ['Rent', 'Groceries', 'Utilities', 'Transportation', 'Entertainment', 'Healthcare', 'Education', 'Shopping', 'Other Expense'],
   };
 
-  const chartRef = React.useRef(null);
-  const chartInstance = React.useRef(null);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
 
+  // Auth state listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("onAuthStateChanged triggered, currentUser:", currentUser);  // Check user object
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) setUser(currentUser);
+      else setUser(null);
     });
-    return () => unsubscribe();  // Cleanup the listener
+    return () => unsub();
   }, []);
 
-
+  // Sign in/out
   const loginWithGoogle = async () => {
     try {
-      const result = await signInWithPopup(auth, provider);  // Ensure this line is being called correctly
-      const user = result.user;
-      setUser(user);
-      console.log('User logged in: ', user);  // Check in the console if the user object is returned successfully
-    } catch (error) {
-      console.error('Error during Google login: ', error.message);  // Error handling in case the login fails
+      const result = await signInWithPopup(auth, provider);
+      setUser(result.user);
+    } catch (err) {
+      console.error('Error during Google login:', err);
+      alert(err.message || 'Login failed');
     }
   };
-
 
   const logout = async () => {
     try {
       await signOut(auth);
       setUser(null);
-      console.log('User logged out');
-    } catch (error) {
-      console.error('Error during logout: ', error.message);
+    } catch (err) {
+      console.error('Error during logout:', err);
+      alert(err.message || 'Logout failed');
     }
   };
 
-  //fetch transaction from firebase
+  // Fetch this user's transactions
   useEffect(() => {
     const fetchTransactions = async () => {
-      const userId = auth.currentUser?.uid;
-      if (userId) {
-        const querySnapshot = await getDocs(collection(db, 'transactions'));
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      try {
+        const q = query(collection(db, 'transactions'), where('userId', '==', uid));
+        const snap = await getDocs(q);
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setTransactions(data);
+      } catch (err) {
+        console.error('Failed to load transactions:', err);
       }
     };
     fetchTransactions();
-  }, []);
+  }, [user]);
 
-  // Filter transactions by selected month
-  const monthlyTransactions = useMemo(() => {
-    return transactions.filter(t => t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
-
-  // Calculate totals
-  const totals = useMemo(() => {
-    const income = monthlyTransactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const expenses = monthlyTransactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    return { income, expenses, balance: income - expenses };
-  }, [monthlyTransactions]);
-
-  // Update chart
+  // Filter by month + category
   useEffect(() => {
-    if (chartRef.current) {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-      }
+    const ft = transactions.filter((t) => {
+      const isMonthMatch = t.date?.startsWith(selectedMonth);
+      const isCategoryMatch = filterCategory === 'all' || t.category === filterCategory;
+      return isMonthMatch && isCategoryMatch;
+    });
+    setFilteredTransactions(ft);
+  }, [transactions, selectedMonth, filterCategory]);
 
-      const ctx = chartRef.current.getContext('2d');
-      const labels = Object.keys(categoryBreakdown);
-      const data = Object.values(categoryBreakdown);
+  // Build category breakdown
+  useEffect(() => {
+    const breakdown = {};
+    filteredTransactions
+      .filter((t) => t.type === 'expense')
+      .forEach((t) => {
+        breakdown[t.category] = (breakdown[t.category] || 0) + Number(t.amount || 0);
+      });
+    setCategoryBreakdown(breakdown);
+  }, [filteredTransactions]);
 
-      if (labels.length > 0) {
-        // Register Chart.js components
-        Chart.Chart.register(
-          Chart.DoughnutController,
-          Chart.ArcElement,
-          Chart.Legend,
-          Chart.Tooltip
-        );
+  // Chart render/update
+  useEffect(() => {
+    if (!chartRef.current) return;
 
-        chartInstance.current = new Chart.Chart(ctx, {
-          type: 'doughnut',
-          data: {
-            labels,
-            datasets: [{
-              data,
-              backgroundColor: [
-                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
-                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
-              ],
-              borderWidth: 2,
-              borderColor: '#ffffff'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'bottom',
-                labels: {
-                  padding: 20,
-                  font: { size: 12 }
-                }
-              }
-            }
-          }
-        });
-      }
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+      chartInstance.current = null;
     }
+
+    const labels = Object.keys(categoryBreakdown);
+    const data = Object.values(categoryBreakdown);
+
+    if (labels.length === 0) return;
+
+    // Register parts (safe to call repeatedly)
+    try {
+      Chart.Chart.register(Chart.DoughnutController, Chart.ArcElement, Chart.Legend, Chart.Tooltip);
+    } catch (_) {
+      // ignore duplicate registration errors
+    }
+
+    const ctx = chartRef.current.getContext('2d');
+    chartInstance.current = new Chart.Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [
+          {
+            data,
+            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#a3e635'],
+            borderWidth: 2,
+            borderColor: '#ffffff',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 20, font: { size: 12 } } },
+        },
+      },
+    });
 
     return () => {
       if (chartInstance.current) {
         chartInstance.current.destroy();
+        chartInstance.current = null;
       }
     };
   }, [categoryBreakdown]);
 
+  // Derived monthly list
+  const monthlyTransactions = useMemo(
+    () => transactions.filter((t) => t.date?.startsWith(selectedMonth)),
+    [transactions, selectedMonth]
+  );
+
+  // Totals
+  const totals = useMemo(() => {
+    const income = monthlyTransactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const expenses = monthlyTransactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+    return { income, expenses, balance: income - expenses };
+  }, [monthlyTransactions]);
+
+  // Add / Delete
   const addTransaction = async () => {
     if (!newTransaction.amount || !newTransaction.category) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      alert('Please sign in again.');
+      return;
+    }
 
     const transaction = {
-      userId: auth.currentUser?.uid,
+      userId: uid,
       ...newTransaction,
-      amount: parseFloat(newTransaction.amount)
+      amount: parseFloat(newTransaction.amount),
     };
 
-    await addDoc(collection(db, 'transactions'), transaction);
-    setTransactions([...transactions, transaction]);
-
-    setNewTransaction({
-      type: 'expense',
-      amount: '',
-      category: '',
-      description: '',
-      date: new Date().toISOString().slice(0, 10)
-    });
-
-    setShowAddModal(false);
+    try {
+      const docRef = await addDoc(collection(db, 'transactions'), transaction);
+      setTransactions((prev) => [...prev, { id: docRef.id, ...transaction }]);
+      setNewTransaction({
+        type: 'expense',
+        amount: '',
+        category: '',
+        description: '',
+        date: new Date().toISOString().slice(0, 10),
+      });
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Add failed:', err);
+      alert(err.message || 'Failed to add transaction');
+    }
   };
 
   const deleteTransaction = async (id) => {
-    await deleteDoc(doc(db, 'transactions', id));
-    setTransactions(transactions.filter(t => t.id !== id));
+    try {
+      await deleteDoc(doc(db, 'transactions', id));
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert(err.message || 'Failed to delete');
+    }
   };
 
-
+  // Exporters
   const exportToCSV = () => {
     const headers = ['Date', 'Type', 'Category', 'Description', 'Amount'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredTransactions.map(t =>
-        [t.date, t.type, t.category, t.description, t.amount].join(',')
-      )
-    ].join('\n');
-
+    const csvContent = [headers.join(','), ...filteredTransactions.map((t) => [t.date, t.type, t.category, t.description, t.amount].join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -224,9 +224,7 @@ const ExpenseTracker = () => {
     URL.revokeObjectURL(url);
   };
 
-
   const exportToPDF = () => {
-    // Simple PDF export using window.print()
     const printWindow = window.open('', '', 'width=800,height=600');
     const reportHTML = `
       <html>
@@ -251,65 +249,37 @@ const ExpenseTracker = () => {
             <h3>${new Date(selectedMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
           </div>
           <div class="summary">
-            <div class="card income">
-              <h4>Total Income</h4>
-              <p>$${totals.income.toFixed(2)}</p>
-            </div>
-            <div class="card expense">
-              <h4>Total Expenses</h4>
-              <p>$${totals.expenses.toFixed(2)}</p>
-            </div>
-            <div class="card balance">
-              <h4>Net Balance</h4>
-              <p>$${totals.balance.toFixed(2)}</p>
-            </div>
+            <div class="card income"><h4>Total Income</h4><p>$${totals.income.toFixed(2)}</p></div>
+            <div class="card expense"><h4>Total Expenses</h4><p>$${totals.expenses.toFixed(2)}</p></div>
+            <div class="card balance"><h4>Net Balance</h4><p>$${totals.balance.toFixed(2)}</p></div>
           </div>
           <table>
-            <thead>
-              <tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th></tr>
-            </thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead>
             <tbody>
-              ${monthlyTransactions.map(t => `
+              ${monthlyTransactions
+                .map(
+                  (t) => `
                 <tr>
                   <td>${new Date(t.date).toLocaleDateString()}</td>
                   <td style="text-transform: capitalize">${t.type}</td>
                   <td>${t.category}</td>
                   <td>${t.description}</td>
-                  <td>$${t.amount.toFixed(2)}</td>
-                </tr>
-              `).join('')}
+                  <td>$${Number(t.amount).toFixed(2)}</td>
+                </tr>`
+                )
+                .join('')}
             </tbody>
           </table>
         </body>
       </html>
     `;
-
+    if (!printWindow) return;
     printWindow.document.write(reportHTML);
     printWindow.document.close();
     printWindow.print();
   };
 
-  useEffect(() => {
-    const filteredTransactions = transactions.filter(t => {
-      const isMonthMatch = t.date.startsWith(selectedMonth);
-      const isCategoryMatch = filterCategory === 'all' || t.category === filterCategory;
-      return isMonthMatch && isCategoryMatch;
-    });
-    setFilteredTransactions(filteredTransactions);
-  }, [transactions, selectedMonth, filterCategory]);
-
-
-  useEffect(() => {
-    const breakdown = {};
-    filteredTransactions
-      .filter(t => t.type === 'expense')
-      .forEach(t => {
-        breakdown[t.category] = (breakdown[t.category] || 0) + t.amount;
-      });
-    setCategoryBreakdown(breakdown);
-  }, [filteredTransactions]);
-
-  const allCategories = [...new Set(filteredTransactions.map(t => t.category))];
+  const allCategories = [...new Set(filteredTransactions.map((t) => t.category))];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -322,7 +292,8 @@ const ExpenseTracker = () => {
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Expense Tracker</h1>
                 <p className="text-gray-600">Track your income and expenses with detailed insights</p>
               </div>
-              <div className="flex flex-wrap gap-3">
+
+              <div className="flex items-center gap-3">
                 <input
                   type="month"
                   value={selectedMonth}
@@ -330,12 +301,21 @@ const ExpenseTracker = () => {
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
                 <button
-                  onClick={addTransaction}
-                  disabled={!newTransaction.amount || !newTransaction.category}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setShowAddModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                 >
                   <PlusCircle size={20} />
                   Add Transaction
+                </button>
+
+                {/* User + Logout */}
+                {user?.photoURL && <img src={user.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-full" />}
+                {user?.displayName && <span className="text-sm text-gray-700">{user.displayName}</span>}
+                <button
+                  onClick={logout}
+                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Log out
                 </button>
               </div>
             </div>
@@ -363,7 +343,11 @@ const ExpenseTracker = () => {
               </div>
             </div>
 
-            <div className={`bg-gradient-to-r ${totals.balance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl shadow-lg p-6 text-white`}>
+            <div
+              className={`bg-gradient-to-r ${
+                totals.balance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'
+              } rounded-xl shadow-lg p-6 text-white`}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-100 text-sm">Net Balance</p>
@@ -382,9 +366,7 @@ const ExpenseTracker = () => {
                 {Object.keys(categoryBreakdown).length > 0 ? (
                   <canvas ref={chartRef}></canvas>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    No expense data available for this month
-                  </div>
+                  <div className="flex items-center justify-center h-full text-gray-500">No expense data available for this month</div>
                 )}
               </div>
             </div>
@@ -405,8 +387,7 @@ const ExpenseTracker = () => {
                   <span className="font-semibold">
                     {Object.keys(categoryBreakdown).length > 0
                       ? Object.entries(categoryBreakdown).sort(([, a], [, b]) => b - a)[0][0]
-                      : 'N/A'
-                    }
+                      : 'N/A'}
                   </span>
                 </div>
 
@@ -449,8 +430,10 @@ const ExpenseTracker = () => {
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
                   <option value="all">All Categories</option>
-                  {allCategories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
+                  {allCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -472,24 +455,26 @@ const ExpenseTracker = () => {
                   {filteredTransactions.length > 0 ? (
                     filteredTransactions
                       .sort((a, b) => new Date(b.date) - new Date(a.date))
-                      .map(transaction => (
+                      .map((transaction) => (
                         <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">{new Date(transaction.date).toLocaleDateString()}</td>
                           <td className="py-3 px-4">
-                            {new Date(transaction.date).toLocaleDateString()}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${transaction.type === 'income'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                              }`}>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                transaction.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}
+                            >
                               {transaction.type}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-medium">{transaction.category}</td>
                           <td className="py-3 px-4 text-gray-600">{transaction.description}</td>
-                          <td className={`py-3 px-4 text-right font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                            ${transaction.amount.toFixed(2)}
+                          <td
+                            className={`py-3 px-4 text-right font-semibold ${
+                              transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            ${Number(transaction.amount).toFixed(2)}
                           </td>
                           <td className="py-3 px-4 text-center">
                             <button
@@ -519,10 +504,7 @@ const ExpenseTracker = () => {
               <div className="bg-white rounded-xl p-6 w-full max-w-md">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-semibold">Add Transaction</h3>
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
+                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-700">
                     <X size={24} />
                   </button>
                 </div>
@@ -560,8 +542,10 @@ const ExpenseTracker = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
                       <option value="">Select Category</option>
-                      {categories[newTransaction.type].map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {categories[newTransaction.type].map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -608,9 +592,14 @@ const ExpenseTracker = () => {
           )}
         </div>
       ) : (
-        <div className="max-w-7xl mx-auto">
-          <h1>Please Log In</h1>
-          <button onClick={loginWithGoogle}>Sign in with Google</button>
+        <div className="max-w-7xl mx-auto flex flex-col items-center gap-4 py-20">
+          <h1 className="text-2xl font-semibold">Please Log In</h1>
+          <button
+            onClick={loginWithGoogle}
+            className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Sign in with Google
+          </button>
         </div>
       )}
     </div>
