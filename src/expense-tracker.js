@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { PlusCircle, Download, TrendingUp, TrendingDown, DollarSign, Filter, X } from 'lucide-react';
+import {
+  PlusCircle,
+  TrendingUp,
+  TrendingDown,
+  Filter as FilterIcon,
+  Download,
+  Calendar as CalendarIcon,
+  LogOut,
+  UserRound,
+  X, Lock, ShieldCheck, LogIn,
+  IndianRupeeIcon
+} from 'lucide-react';
 import * as Chart from 'chart.js';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -7,7 +18,6 @@ import { auth, provider, db } from './firebase';
 
 const ExpenseTracker = () => {
   const [transactions, setTransactions] = useState([
-    // Starter sample data (will be replaced once user data loads)
     { id: 's1', type: 'income', amount: 5000, category: 'Salary', description: 'Monthly salary', date: '2024-01-15' },
     { id: 's2', type: 'expense', amount: 1200, category: 'Rent', description: 'Monthly rent', date: '2024-01-01' },
     { id: 's3', type: 'expense', amount: 300, category: 'Groceries', description: 'Weekly groceries', date: '2024-01-05' },
@@ -35,8 +45,15 @@ const ExpenseTracker = () => {
 
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
+  const GoogleIcon = () => (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.64 9.20455c0-.63955-.0573-1.25591-.1636-1.84864H9v3.49545h4.8436c-.2099 1.1318-.8468 2.0909-1.8045 2.7336v2.2736h2.9155c1.7045-1.5718 2.6854-3.8864 2.6854-6.654." fill="#4285F4" />
+      <path d="M9 18c2.43 0 4.4699-.8046 5.9591-2.1864l-2.9155-2.2736c-.8046.54-1.8341.8591-3.0436.8591-2.34181 0-4.32455-1.58-5.02909-3.70455H.957275v2.33181C2.43818 15.7273 5.48182 18 9 18z" fill="#34A853" />
+      <path d="M3.97091 10.6946A5.40728 5.40728 0 0 1 3.68182 9c0-.58727.10182-1.15818.28909-1.69455V4.97364H.957275A8.99637 8.99637 0 0 0 0 9c0 1.4573.348182 2.8346.957275 4.0264l3.013635-2.3318z" fill="#FBBC05" />
+      <path d="M9 3.54545c1.3218 0 2.5118.45455 3.4454 1.34545l2.5864-2.58636C13.4654.882727 11.4264 0 9 0 5.48182 0 2.43818 2.27273.957275 5.0l3.013635 2.33182C4.67545 5.12545 6.65818 3.54545 9 3.54545z" fill="#EA4335" />
+    </svg>
+  );
 
-  // Auth state listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) setUser(currentUser);
@@ -45,7 +62,6 @@ const ExpenseTracker = () => {
     return () => unsub();
   }, []);
 
-  // Sign in/out
   const loginWithGoogle = async () => {
     try {
       const result = await signInWithPopup(auth, provider);
@@ -66,7 +82,6 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Fetch this user's transactions
   useEffect(() => {
     const fetchTransactions = async () => {
       const uid = auth.currentUser?.uid;
@@ -83,7 +98,6 @@ const ExpenseTracker = () => {
     fetchTransactions();
   }, [user]);
 
-  // Filter by month + category
   useEffect(() => {
     const ft = transactions.filter((t) => {
       const isMonthMatch = t.date?.startsWith(selectedMonth);
@@ -93,7 +107,6 @@ const ExpenseTracker = () => {
     setFilteredTransactions(ft);
   }, [transactions, selectedMonth, filterCategory]);
 
-  // Build category breakdown
   useEffect(() => {
     const breakdown = {};
     filteredTransactions
@@ -104,7 +117,6 @@ const ExpenseTracker = () => {
     setCategoryBreakdown(breakdown);
   }, [filteredTransactions]);
 
-  // Chart render/update
   useEffect(() => {
     if (!chartRef.current) return;
 
@@ -115,15 +127,11 @@ const ExpenseTracker = () => {
 
     const labels = Object.keys(categoryBreakdown);
     const data = Object.values(categoryBreakdown);
-
     if (labels.length === 0) return;
 
-    // Register parts (safe to call repeatedly)
     try {
       Chart.Chart.register(Chart.DoughnutController, Chart.ArcElement, Chart.Legend, Chart.Tooltip);
-    } catch (_) {
-      // ignore duplicate registration errors
-    }
+    } catch (_) {}
 
     const ctx = chartRef.current.getContext('2d');
     chartInstance.current = new Chart.Chart(ctx, {
@@ -156,20 +164,22 @@ const ExpenseTracker = () => {
     };
   }, [categoryBreakdown]);
 
-  // Derived monthly list
   const monthlyTransactions = useMemo(
     () => transactions.filter((t) => t.date?.startsWith(selectedMonth)),
     [transactions, selectedMonth]
   );
 
-  // Totals
   const totals = useMemo(() => {
     const income = monthlyTransactions.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
     const expenses = monthlyTransactions.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
     return { income, expenses, balance: income - expenses };
   }, [monthlyTransactions]);
 
-  // Add / Delete
+  const savingsRate = totals?.income > 0 ? ((totals.balance / totals.income) * 100).toFixed(1) : 0;
+  const topCategory = Object.keys(categoryBreakdown || {}).length
+    ? Object.entries(categoryBreakdown).sort(([, a], [, b]) => b - a)[0][0]
+    : "N/A";
+
   const addTransaction = async () => {
     if (!newTransaction.amount || !newTransaction.category) return;
     const uid = auth.currentUser?.uid;
@@ -211,7 +221,6 @@ const ExpenseTracker = () => {
     }
   };
 
-  // Exporters
   const exportToCSV = () => {
     const headers = ['Date', 'Type', 'Category', 'Description', 'Amount'];
     const csvContent = [headers.join(','), ...filteredTransactions.map((t) => [t.date, t.type, t.category, t.description, t.amount].join(','))].join('\n');
@@ -259,13 +268,13 @@ const ExpenseTracker = () => {
               ${monthlyTransactions
                 .map(
                   (t) => `
-                <tr>
-                  <td>${new Date(t.date).toLocaleDateString()}</td>
-                  <td style="text-transform: capitalize">${t.type}</td>
-                  <td>${t.category}</td>
-                  <td>${t.description}</td>
-                  <td>$${Number(t.amount).toFixed(2)}</td>
-                </tr>`
+                    <tr>
+                      <td>${new Date(t.date).toLocaleDateString()}</td>
+                      <td style="text-transform: capitalize">${t.type}</td>
+                      <td>${t.category}</td>
+                      <td>${t.description}</td>
+                      <td>$${Number(t.amount).toFixed(2)}</td>
+                    </tr>`
                 )
                 .join('')}
             </tbody>
@@ -282,113 +291,124 @@ const ExpenseTracker = () => {
   const allCategories = [...new Set(filteredTransactions.map((t) => t.category))];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {user ? (
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Header */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-5 sm:p-6 mb-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Expense Tracker</h1>
-                <p className="text-gray-600">Track your income and expenses with detailed insights</p>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Expense Tracker</h1>
+                <p className="text-gray-600 mt-1">Track your income and expenses with detailed insights</p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-blue-500">
+                  <CalendarIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                  <span className="sr-only">Select month</span>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="w-[9.5rem] outline-none text-gray-700 placeholder-gray-400"
+                  />
+                </label>
+
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium shadow hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
                 >
-                  <PlusCircle size={20} />
+                  <PlusCircle className="h-4 w-4" />
                   Add Transaction
                 </button>
 
-                {/* User + Logout */}
-                {user?.photoURL && <img src={user.photoURL} alt={user.displayName || 'User'} className="w-9 h-9 rounded-full" />}
-                {user?.displayName && <span className="text-sm text-gray-700">{user.displayName}</span>}
+                <div className="h-6 w-px bg-gray-200 mx-1" aria-hidden></div>
+                {user?.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || "User"}
+                    className="w-9 h-9 rounded-full object-cover ring-1 ring-gray-200"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center ring-1 ring-gray-200">
+                    <UserRound className="h-5 w-5 text-gray-500" aria-hidden />
+                  </div>
+                )}
+                {user?.displayName && <span className="text-sm text-gray-700 truncate max-w-[10rem]">{user.displayName}</span>}
                 <button
                   onClick={logout}
-                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
                 >
+                  <LogOut className="h-4 w-4" />
                   Log out
                 </button>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="rounded-2xl shadow-sm ring-1 ring-green-200 bg-gradient-to-r from-green-500 to-green-600 p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-100 text-sm">Total Income</p>
-                  <p className="text-3xl font-bold">${totals.income.toFixed(2)}</p>
+                  <p className="text-white/80 text-sm">Total Income</p>
+                  <p className="text-3xl font-bold leading-tight">₹{totals.income.toFixed(2)}</p>
                 </div>
-                <TrendingUp size={32} className="text-green-200" />
+                <TrendingUp size={32} className="opacity-80" aria-hidden />
               </div>
             </div>
 
-            <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
+            <div className="rounded-2xl shadow-sm ring-1 ring-red-200 bg-gradient-to-r from-red-500 to-red-600 p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-red-100 text-sm">Total Expenses</p>
-                  <p className="text-3xl font-bold">${totals.expenses.toFixed(2)}</p>
+                  <p className="text-white/80 text-sm">Total Expenses</p>
+                  <p className="text-3xl font-bold leading-tight">₹{totals.expenses.toFixed(2)}</p>
                 </div>
-                <TrendingDown size={32} className="text-red-200" />
+                <TrendingDown size={32} className="opacity-80" aria-hidden />
               </div>
             </div>
 
             <div
-              className={`bg-gradient-to-r ${
-                totals.balance >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'
-              } rounded-xl shadow-lg p-6 text-white`}
+              className={`rounded-2xl shadow-sm ring-1 ${totals.balance >= 0 ? "ring-blue-200 bg-gradient-to-r from-blue-500 to-blue-600" : "ring-orange-200 bg-gradient-to-r from-orange-500 to-orange-600"
+                } p-6 text-white`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-sm">Net Balance</p>
-                  <p className="text-3xl font-bold">${totals.balance.toFixed(2)}</p>
+                  <p className="text-white/80 text-sm">Net Balance</p>
+                  <p className="text-3xl font-bold leading-tight">₹{totals.balance.toFixed(2)}</p>
                 </div>
-                <DollarSign size={32} className="text-blue-200" />
+                <IndianRupeeIcon size={32} className="opacity-80" aria-hidden />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Chart */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Expense Breakdown</h3>
+            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Expense Breakdown</h3>
               <div className="h-64">
-                {Object.keys(categoryBreakdown).length > 0 ? (
-                  <canvas ref={chartRef}></canvas>
+                {Object.keys(categoryBreakdown || {}).length > 0 ? (
+                  <canvas ref={chartRef} aria-label="Expenses by category" />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">No expense data available for this month</div>
+                  <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                    No expense data available for this month
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Monthly Insights */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Monthly Insights</h3>
+            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Monthly Insights</h3>
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Savings Rate</span>
-                  <span className="font-semibold text-lg">
-                    {totals.income > 0 ? ((totals.balance / totals.income) * 100).toFixed(1) : 0}%
-                  </span>
+                  <span className="font-semibold text-lg">{savingsRate}%</span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Top Expense Category</span>
-                  <span className="font-semibold">
-                    {Object.keys(categoryBreakdown).length > 0
-                      ? Object.entries(categoryBreakdown).sort(([, a], [, b]) => b - a)[0][0]
-                      : 'N/A'}
-                  </span>
+                  <span className="font-semibold">{topCategory}</span>
                 </div>
 
                 <div className="flex justify-between items-center">
@@ -396,38 +416,40 @@ const ExpenseTracker = () => {
                   <span className="font-semibold">{monthlyTransactions.length}</span>
                 </div>
 
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t border-gray-200">
                   <div className="flex gap-3">
                     <button
                       onClick={exportToCSV}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500"
                     >
-                      <Download size={16} />
+                      <Download className="h-4 w-4" />
                       CSV
                     </button>
                     <button
                       onClick={exportToPDF}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500"
                     >
-                      <Download size={16} />
+                      <Download className="h-4 w-4" />
                       PDF
                     </button>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Transactions List */}
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">Recent Transactions</h3>
+          <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Recent Transactions</h3>
               <div className="flex items-center gap-3">
-                <Filter size={20} className="text-gray-500" />
+                <FilterIcon size={18} className="text-gray-500" aria-hidden />
+                <label className="sr-only" htmlFor="filterCategory">Filter category</label>
                 <select
+                  id="filterCategory"
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
                 >
                   <option value="all">All Categories</option>
                   {allCategories.map((cat) => (
@@ -439,10 +461,10 @@ const ExpenseTracker = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="min-w-full whitespace-nowrap">
                 <thead>
-                  <tr className="border-b border-gray-200">
+                  <tr className="border-y border-gray-200 bg-gray-50">
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Category</th>
@@ -454,32 +476,33 @@ const ExpenseTracker = () => {
                 <tbody>
                   {filteredTransactions.length > 0 ? (
                     filteredTransactions
-                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map((transaction) => (
                         <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4">{new Date(transaction.date).toLocaleDateString()}</td>
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-4 align-top">{new Date(transaction.date).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 align-top">
                             <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                transaction.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${transaction.type === "income"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                                }`}
                             >
                               {transaction.type}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-medium">{transaction.category}</td>
-                          <td className="py-3 px-4 text-gray-600">{transaction.description}</td>
+                          <td className="py-3 px-4 align-top font-medium">{transaction.category}</td>
+                          <td className="py-3 px-4 align-top text-gray-600 max-w-[24rem] truncate">{transaction.description}</td>
                           <td
-                            className={`py-3 px-4 text-right font-semibold ${
-                              transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                            }`}
+                            className={`py-3 px-4 align-top text-right font-semibold ${transaction.type === "income" ? "text-green-600" : "text-red-600"
+                              }`}
                           >
                             ${Number(transaction.amount).toFixed(2)}
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3 px-4 align-top text-center">
                             <button
                               onClick={() => deleteTransaction(transaction.id)}
-                              className="text-red-500 hover:text-red-700 transition-colors"
+                              className="text-red-500 hover:text-red-700 transition-colors p-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
+                              aria-label={`Delete ${transaction.description || "transaction"}`}
                             >
                               <X size={16} />
                             </button>
@@ -496,16 +519,20 @@ const ExpenseTracker = () => {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
           {/* Add Transaction Modal */}
           {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-lg ring-1 ring-gray-200">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-semibold">Add Transaction</h3>
-                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-700">
-                    <X size={24} />
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Add Transaction</h3>
+                  <button
+                    onClick={() => setShowAddModal(false)}
+                    className="text-gray-500 hover:text-gray-700 p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                    aria-label="Close modal"
+                  >
+                    <X size={22} />
                   </button>
                 </div>
 
@@ -514,7 +541,7 @@ const ExpenseTracker = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
                     <select
                       value={newTransaction.type}
-                      onChange={(e) => setNewTransaction({ ...newTransaction, type: e.target.value, category: '' })}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, type: e.target.value, category: "" })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
                       <option value="expense">Expense</option>
@@ -574,14 +601,14 @@ const ExpenseTracker = () => {
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={() => setShowAddModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={addTransaction}
                       disabled={!newTransaction.amount || !newTransaction.category}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       Add Transaction
                     </button>
@@ -592,14 +619,48 @@ const ExpenseTracker = () => {
           )}
         </div>
       ) : (
-        <div className="max-w-7xl mx-auto flex flex-col items-center gap-4 py-20">
-          <h1 className="text-2xl font-semibold">Please Log In</h1>
-          <button
-            onClick={loginWithGoogle}
-            className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Sign in with Google
-          </button>
+        /* Unauthenticated state (light theme, consistent with app) */
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-10">
+            <div className="w-full max-w-md">
+              <div className="rounded-2xl ring-1 ring-gray-200 bg-white p-6 shadow-sm">
+                <div className="text-center space-y-2">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 ring-1 ring-gray-200">
+                    <Lock className="h-6 w-6 text-gray-500" aria-hidden />
+                  </div>
+                  <h1 className="text-2xl text-gray-900 font-semibold tracking-tight">Please log in</h1>
+                  <p className="text-sm text-gray-600">Secure sign-in to continue to your dashboard</p>
+                </div>
+                <div className="mt-5 space-y-4">
+                  <button
+                    type="button"
+                    onClick={loginWithGoogle}
+                    className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-base font-medium text-white transition-[background,transform] hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                    aria-label="Continue with Google"
+                  >
+                    <GoogleIcon />
+                    Continue with Google
+                    <LogIn className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+                  </button>
+
+                  <div className="relative flex items-center">
+                    <div className="h-px w-full bg-gray-200" />
+                    <span className="px-3 text-xs text-gray-500 bg-white relative -top-2">or</span>
+                    <div className="h-px w-full bg-gray-200" />
+                  </div>
+
+                  <div className="flex items-start gap-2 rounded-lg p-3 text-xs bg-gray-50 text-gray-600 ring-1 ring-gray-200">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+                    <p>We use industry-standard encryption. By continuing, you agree to our Terms and Privacy Policy.</p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-6 text-center text-xs text-gray-500">
+                © {new Date().getFullYear()}. All rights reserved.
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
