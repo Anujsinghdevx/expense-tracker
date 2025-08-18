@@ -4,7 +4,7 @@ import { Download } from "lucide-react";
 
 export default function InsightsPanel({ savingsRate, topCategory, totalCount, filteredTransactions, selectedMonth }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+    <div className="bg-white mb-6 rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
       <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Monthly Insights</h3>
       <div className="space-y-4">
         <div className="flex justify-between items-center">
