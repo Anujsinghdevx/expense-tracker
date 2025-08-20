@@ -1,4 +1,3 @@
-// src/firebase.js
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -20,12 +19,10 @@ if (process.env.NODE_ENV !== 'production') {
     .filter(([, v]) => !v)
     .map(([k]) => k);
   if (missing.length) {
-    // eslint-disable-next-line no-console
     console.error('Missing Firebase env vars:', missing);
   }
   const looksLikeKey = /^AIza[0-9A-Za-z_\-]{35}$/.test(firebaseConfig.apiKey || '');
   if (!looksLikeKey) {
-    // eslint-disable-next-line no-console
     console.error('apiKey looks malformed (should start with AIza… and be 39 chars total).');
   }
 }

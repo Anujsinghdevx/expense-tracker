@@ -8,14 +8,18 @@ export default function IncomeExpenseCombo({ transactions = [] }) {
     const [year, setYear] = useState(fallback);
     const income = useMemo(() => sumByMonth(transactions, "income", year), [transactions, year]);
     const expense = useMemo(() => sumByMonth(transactions, "expense", year), [transactions, year]);
-    const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const labels = useMemo(
+        () => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        []
+    );
+
     useEffect(() => {
         if (!chartRef.current) return; if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
         try { Chart.Chart.register(Chart.BarController, Chart.BarElement, Chart.LineController, Chart.LineElement, Chart.PointElement, Chart.LinearScale, Chart.CategoryScale, Chart.Legend, Chart.Tooltip); } catch (_) { }
         const ctx = chartRef.current.getContext("2d");
         chartInstance.current = new Chart.Chart(ctx, { type: "bar", data: { labels, datasets: [{ type: "bar", label: "Expenses", data: expense, borderWidth: 0 }, { type: "line", label: "Income", data: income, borderWidth: 2, tension: 0.3, pointRadius: 3 }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, scales: { y: { beginAtZero: true, title: { display: true, text: "Amount (₹)" } }, x: { title: { display: true, text: `${year}` } } } } });
         return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
-    }, [income, expense, year]);
+    }, [income, expense, year, labels]);
     return (
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
             <div className="flex items-center justify-between mb-4"><h3 className="text-lg sm:text-xl font-semibold text-gray-900">Income vs Expense</h3>

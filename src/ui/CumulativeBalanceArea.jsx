@@ -9,7 +9,11 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
     const inc = useMemo(() => byMonth(transactions, "income", year), [transactions, year]);
     const exp = useMemo(() => byMonth(transactions, "expense", year), [transactions, year]);
     const cum = useMemo(() => { const out = []; let running = 0; for (let i = 0; i < 12; i++) { running += (inc[i] - exp[i]); out.push(running); } return out; }, [inc, exp]);
-    const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const labels = useMemo(
+        () => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        []
+    );
+
     useEffect(() => {
         if (!chartRef.current) return; if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
         try { Chart.Chart.register(Chart.LineController, Chart.LineElement, Chart.PointElement, Chart.LinearScale, Chart.CategoryScale, Chart.Legend, Chart.Tooltip, Chart.Filler); } catch (_) { }
@@ -50,7 +54,7 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
             }
         });
         return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
-    }, [cum, year]);
+    }, [cum, year,labels]);
     return (
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
             <div className="flex items-center justify-between mb-4"><h3 className="text-lg sm:text-xl font-semibold text-gray-900">Cumulative Balance</h3>
