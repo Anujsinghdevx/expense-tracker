@@ -2,23 +2,29 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Chart from "chart.js";
 
+const COLORS = {
+  line: "#EF4444",               // red line
+  point: "#B91C1C",              // darker red point
+  fillTop: "rgba(239,68,68,0.25)",
+  fillBottom: "rgba(239,68,68,0.02)",
+};
+
 function formatINR(n) {
   const v = Number(n || 0);
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(v);
 }
 
 export default function MonthlyExpenseLine({ transactions = [] }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
-  // Collect available years from data (fallback to current year)
   const yearsInData = useMemo(() => {
-    const s = new Set(
-      transactions
-        .map((t) => t?.date?.slice(0, 4))
-        .filter(Boolean)
-    );
-    return Array.from(s).sort(); // ascending
+    const s = new Set(transactions.map((t) => t?.date?.slice(0, 4)).filter(Boolean));
+    return Array.from(s).sort();
   }, [transactions]);
 
   const defaultYear =
@@ -26,13 +32,12 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
 
   const [year, setYear] = useState(defaultYear);
 
-  // Compute monthly sums (expenses only) for selected year
   const monthlyData = useMemo(() => {
     const sums = Array(12).fill(0);
     for (const t of transactions) {
       if (!t?.date || t.type !== "expense") continue;
-      if (!t.date.startsWith(year)) continue; // YYYY-...
-      const mIdx = Number(t.date.slice(5, 7)) - 1; // 0-11
+      if (!t.date.startsWith(year)) continue;
+      const mIdx = Number(t.date.slice(5, 7)) - 1;
       const amt = Number(t.amount || 0);
       if (!Number.isNaN(mIdx) && mIdx >= 0 && mIdx < 12) sums[mIdx] += amt;
     }
@@ -52,7 +57,6 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
       chartInstance.current = null;
     }
 
-    // Register needed pieces once (Chart.js v3+)
     try {
       Chart.Chart.register(
         Chart.LineController,
@@ -67,6 +71,13 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
     } catch (_) {}
 
     const ctx = chartRef.current.getContext("2d");
+
+    // Create a vertical gradient for the area fill
+    const { height } = chartRef.current;
+    const gradient = ctx.createLinearGradient(0, 0, 0, height || 256);
+    gradient.addColorStop(0, COLORS.fillTop);
+    gradient.addColorStop(1, COLORS.fillBottom);
+
     chartInstance.current = new Chart.Chart(ctx, {
       type: "line",
       data: {
@@ -75,11 +86,14 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
           {
             label: `Expenses (${year})`,
             data: monthlyData,
-            // keep default colors; Tailwind is for layout, Chart.js handles line
+            borderColor: COLORS.line,
+            backgroundColor: gradient,   // soft red fill
             borderWidth: 2,
             tension: 0.3,
             pointRadius: 3,
-            fill: false,
+            pointBackgroundColor: COLORS.point,
+            pointBorderColor: COLORS.point,
+            fill: true,                  // enable fill
           },
         ],
       },
@@ -88,7 +102,7 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { display: true },
+          legend: { display: true, labels: { usePointStyle: true, pointStyle: "circle" } },
           tooltip: {
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${formatINR(ctx.parsed.y)}`,
@@ -102,8 +116,9 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
               callback: (v) => (Number(v) >= 1000 ? `${Math.round(v / 1000)}k` : v),
             },
             title: { display: true, text: "Expense (₹)" },
+            grid: { drawBorder: false },
           },
-          x: { title: { display: true, text: "Month" } },
+          x: { title: { display: true, text: "Month" }, grid: { display: false } },
         },
       },
     });
@@ -120,7 +135,7 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
     <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Monthly Expense Trend</h3>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
           <label htmlFor="year" className="text-sm text-gray-600">Year</label>
           <select
             id="year"

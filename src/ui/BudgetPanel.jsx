@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
   addDoc,
-  getDocs,
   query,
   where,
   doc,
   updateDoc,
+  deleteDoc,
+  onSnapshot,
+  Timestamp,
 } from "firebase/firestore";
 
 function BudgetBar({ spent, limit }) {
@@ -24,68 +26,135 @@ function BudgetBar({ spent, limit }) {
   );
 }
 
+// Normalize categories for stable lookup
+const normalizeCat = (s) => (s || "Other Expense").trim().toLowerCase();
+
+// Format to "YYYY-MM" from selectedMonth (which can be "YYYY-MM" or Date string)
+const monthKey = (sel) => {
+  if (!sel) return "";
+  // If already "YYYY-MM"
+  if (typeof sel === "string" && sel.length === 7 && sel[4] === "-") return sel;
+  const d = new Date(sel);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+};
+
 export default function BudgetPanel({ selectedMonth, user, db }) {
-  const [items, setItems] = useState([]); // [{id, category, amount}]
+  const [items, setItems] = useState([]); // budgets
   const [form, setForm] = useState({ category: "Groceries", amount: "" });
   const [saving, setSaving] = useState(false);
 
-  // ✅ NEW: track spend per category for this month
-  const [spentByCategory, setSpentByCategory] = useState({}); // { [category]: number }
+  // aggregated spend per normalized category for this month
+  const [spentByCategory, setSpentByCategory] = useState({}); // { [normalizedCategory]: number }
 
-  // Helper: month start/end
+  const ym = useMemo(() => monthKey(selectedMonth), [selectedMonth]);
+
+  // JS Date boundaries for Timestamp path
   const monthStart = useMemo(() => {
-    const d = new Date(selectedMonth);
-    return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-  }, [selectedMonth]);
+    const [y, m] = ym.split("-");
+    const Y = Number(y), M = Number(m) - 1;
+    return new Date(Y, M, 1, 0, 0, 0, 0);
+  }, [ym]);
 
   const monthEndExclusive = useMemo(() => {
-    const d = new Date(selectedMonth);
-    return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0); // exclusive
-  }, [selectedMonth]);
+    const [y, m] = ym.split("-");
+    const Y = Number(y), M = Number(m) - 1;
+    return new Date(Y, M + 1, 1, 0, 0, 0, 0); // exclusive
+  }, [ym]);
 
+  // 🔄 Real-time budgets (by month string)
   useEffect(() => {
-    const loadBudgets = async () => {
-      if (!user) return;
-      const qBudgets = query(
-        collection(db, "budgets"),
-        where("userId", "==", user.uid),
-        where("month", "==", selectedMonth)
-      );
-      const snap = await getDocs(qBudgets);
-      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    };
-    loadBudgets();
-  }, [db, user, selectedMonth]);
+    if (!user || !ym) return;
+    const qBudgets = query(
+      collection(db, "budgets"),
+      where("userId", "==", user.uid),
+      where("month", "==", ym)
+    );
+    const unsub = onSnapshot(
+      qBudgets,
+      (snap) => {
+        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      (err) => console.error("Budgets snapshot error:", err)
+    );
+    return () => unsub();
+  }, [db, user, ym]);
 
-  // ✅ NEW: load transactions and aggregate spend per category for the month
+  // 🔄 Real-time transactions for the month (support Timestamp and string dates)
   useEffect(() => {
-    const loadSpend = async () => {
-      if (!user) return;
+    if (!user || !ym) return;
 
-      // If your `date` is a Firestore Timestamp:
-      const qTx = query(
-        collection(db, "transactions"),
-        where("userId", "==", user.uid),
-        where("type", "==", "expense"),
-        where("date", ">=", monthStart),
-        where("date", "<", monthEndExclusive)
-      );
+    // --- Listener A: Timestamp range ---
+    const qTs = query(
+      collection(db, "transactions"),
+      where("userId", "==", user.uid),
+      where("type", "==", "expense"),
+      where("date", ">=", Timestamp.fromDate(monthStart)),
+      where("date", "<", Timestamp.fromDate(monthEndExclusive))
+    );
 
-      const snap = await getDocs(qTx);
+    // --- Listener B: String "YYYY-MM-DD" range (lexicographic) ---
+    // Use < `${ym}-99` as an easy exclusive upper bound, covers up to 31 safely
+    const qStr = query(
+      collection(db, "transactions"),
+      where("userId", "==", user.uid),
+      where("type", "==", "expense"),
+      where("date", ">=", `${ym}-01`),
+      where("date", "<", `${ym}-99`)
+    );
 
-      const agg = {};
-      snap.forEach((doc) => {
-        const t = doc.data();
-        const cat = t.category || "Other Expense";
-        const amt = Number(t.amount || 0);
-        agg[cat] = (agg[cat] || 0) + (Number.isFinite(amt) ? amt : 0);
-      });
+    let latestAggTs = {};
+    let latestAggStr = {};
 
-      setSpentByCategory(agg);
+    const combineAndSet = () => {
+      // Merge both maps
+      const merged = { ...latestAggStr };
+      for (const [k, v] of Object.entries(latestAggTs)) {
+        merged[k] = (merged[k] || 0) + v;
+      }
+      setSpentByCategory(merged);
     };
 
-    loadSpend();
-  }, [db, user, monthStart, monthEndExclusive]);
+    const unsubTs = onSnapshot(
+      qTs,
+      (snap) => {
+        const agg = {};
+        snap.forEach((d) => {
+          const t = d.data();
+          const key = normalizeCat(t.category);
+          const amt = Number(t.amount || 0);
+          agg[key] = (agg[key] || 0) + (Number.isFinite(amt) ? amt : 0);
+        });
+        latestAggTs = agg;
+        combineAndSet();
+      },
+      (err) => console.error("Tx Timestamp snapshot error:", err)
+    );
+
+    const unsubStr = onSnapshot(
+      qStr,
+      (snap) => {
+        const agg = {};
+        snap.forEach((d) => {
+          const t = d.data();
+          // Only count string dates here to avoid double-counting mixed data
+          if (typeof t.date !== "string") return;
+          const key = normalizeCat(t.category);
+          const amt = Number(t.amount || 0);
+          agg[key] = (agg[key] || 0) + (Number.isFinite(amt) ? amt : 0);
+        });
+        latestAggStr = agg;
+        combineAndSet();
+      },
+      (err) => console.error("Tx String snapshot error:", err)
+    );
+
+    return () => {
+      unsubTs();
+      unsubStr();
+    };
+  }, [db, user, ym, monthStart, monthEndExclusive]);
 
   const totalBudget = useMemo(
     () => items.reduce((s, i) => s + Number(i.amount || 0), 0),
@@ -99,44 +168,36 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !ym) return;
     const amountNum = Number(form.amount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) return;
 
     setSaving(true);
     try {
-      const existing = items.find(
-        (i) => i.category === form.category && i.month === selectedMonth
-      );
+      const existing = items.find((i) => i.category === form.category && i.month === ym);
 
       if (existing) {
         const ref = doc(db, "budgets", existing.id);
         await updateDoc(ref, { amount: amountNum });
-        setItems((prev) =>
-          prev.map((i) => (i.id === existing.id ? { ...i, amount: amountNum } : i))
-        );
       } else {
-        const docRef = await addDoc(collection(db, "budgets"), {
+        await addDoc(collection(db, "budgets"), {
           userId: user.uid,
-          month: selectedMonth,
-          category: form.category,
+          month: ym, // store canonical "YYYY-MM"
+          category: form.category, // keep human-readable; normalize only for lookups
           amount: amountNum,
         });
-        setItems((prev) => [
-          ...prev,
-          {
-            id: docRef.id,
-            userId: user.uid,
-            month: selectedMonth,
-            category: form.category,
-            amount: amountNum,
-          },
-        ]);
       }
       setForm((f) => ({ ...f, amount: "" }));
     } finally {
       setSaving(false);
     }
+  };
+
+  const onDelete = async (id) => {
+    if (!id) return;
+    const ok = window.confirm("Delete this budget?");
+    if (!ok) return;
+    await deleteDoc(doc(db, "budgets", id));
   };
 
   const categories = [
@@ -156,7 +217,7 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
           Budgets (
-          {new Date(selectedMonth).toLocaleString("en-US", { month: "long", year: "numeric" })})
+          {new Date(`${ym}-01`).toLocaleString("en-US", { month: "long", year: "numeric" })})
         </h3>
         <div className="text-sm text-gray-600 flex gap-4">
           <span>
@@ -166,12 +227,16 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
             Spent: <span className="font-medium">₹{totalSpent.toFixed(0)}</span>
           </span>
           <span>
-            Left: <span className="font-medium">₹{Math.max(0, totalBudget - totalSpent).toFixed(0)}</span>
+            Left:{" "}
+            <span className="font-medium">
+              ₹{Math.max(0, totalBudget - totalSpent).toFixed(0)}
+            </span>
           </span>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
+        {/* Add / Update budget */}
         <form onSubmit={onSubmit} className="rounded-xl ring-1 ring-gray-200 p-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <select
@@ -207,18 +272,30 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
           </div>
         </form>
 
+        {/* Budget list */}
         <div className="space-y-3">
           {items.length ? (
             items.map((b) => {
-              const spent = Number(spentByCategory[b.category] || 0);
+              const spent = Number(spentByCategory[normalizeCat(b.category)] || 0);
               const limit = Number(b.amount || 0);
+              const left = Math.max(0, limit - spent);
               return (
                 <div key={b.id} className="rounded-xl ring-1 ring-gray-200 p-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium">{b.category}</span>
-                    <span>
-                      ₹{spent.toFixed(0)} / ₹{limit.toFixed(0)}
-                    </span>
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <div className="font-medium">{b.category}</div>
+                    <div className="flex items-center gap-3">
+                      <span>
+                        ₹{spent.toFixed(0)} / ₹{limit.toFixed(0)}{" "}
+                        <span className="text-gray-500">· Left ₹{left.toFixed(0)}</span>
+                      </span>
+                      <button
+                        onClick={() => onDelete(b.id)}
+                        className="px-2 py-1 rounded-md bg-red-50 text-red-700 hover:bg-red-100"
+                        title="Delete budget"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   <BudgetBar spent={spent} limit={limit} />
                 </div>
