@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   collection,
   addDoc,
@@ -10,6 +10,7 @@ import {
   onSnapshot,
   Timestamp,
 } from "firebase/firestore";
+import { X } from "lucide-react";
 
 function BudgetBar({ spent, limit }) {
   const pct = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
@@ -32,7 +33,6 @@ const normalizeCat = (s) => (s || "Other Expense").trim().toLowerCase();
 // Format to "YYYY-MM" from selectedMonth (which can be "YYYY-MM" or Date string)
 const monthKey = (sel) => {
   if (!sel) return "";
-  // If already "YYYY-MM"
   if (typeof sel === "string" && sel.length === 7 && sel[4] === "-") return sel;
   const d = new Date(sel);
   const y = d.getFullYear();
@@ -95,7 +95,6 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
     );
 
     // --- Listener B: String "YYYY-MM-DD" range (lexicographic) ---
-    // Use < `${ym}-99` as an easy exclusive upper bound, covers up to 31 safely
     const qStr = query(
       collection(db, "transactions"),
       where("userId", "==", user.uid),
@@ -108,7 +107,6 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
     let latestAggStr = {};
 
     const combineAndSet = () => {
-      // Merge both maps
       const merged = { ...latestAggStr };
       for (const [k, v] of Object.entries(latestAggTs)) {
         merged[k] = (merged[k] || 0) + v;
@@ -138,7 +136,6 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
         const agg = {};
         snap.forEach((d) => {
           const t = d.data();
-          // Only count string dates here to avoid double-counting mixed data
           if (typeof t.date !== "string") return;
           const key = normalizeCat(t.category);
           const amt = Number(t.amount || 0);
@@ -193,12 +190,25 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
     }
   };
 
-  const onDelete = async (id) => {
-    if (!id) return;
-    const ok = window.confirm("Delete this budget?");
-    if (!ok) return;
-    await deleteDoc(doc(db, "budgets", id));
-  };
+  // ===== Confirm Modal state/handlers (like your TransactionsTable) =====
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingBudget, setPendingBudget] = useState(null); // { id, category, amount, month }
+
+  const requestDelete = useCallback((b) => {
+    setPendingBudget(b);
+    setConfirmOpen(true);
+  }, []);
+
+  const closeConfirm = useCallback(() => {
+    setConfirmOpen(false);
+    setPendingBudget(null);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!pendingBudget?.id) return;
+    await deleteDoc(doc(db, "budgets", pendingBudget.id));
+    closeConfirm();
+  }, [pendingBudget, db, closeConfirm]);
 
   const categories = [
     "Rent",
@@ -239,7 +249,9 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
         {/* Add / Update budget */}
         <form onSubmit={onSubmit} className="rounded-xl ring-1 ring-gray-200 p-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="sr-only" htmlFor="budgetCategory">Budget category</label>
             <select
+              id="budgetCategory"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
@@ -251,7 +263,9 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               ))}
             </select>
 
+            <label className="sr-only" htmlFor="budgetAmount">Amount</label>
             <input
+              id="budgetAmount"
               type="number"
               inputMode="numeric"
               min="1"
@@ -289,7 +303,7 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
                         <span className="text-gray-500">· Left ₹{left.toFixed(0)}</span>
                       </span>
                       <button
-                        onClick={() => onDelete(b.id)}
+                        onClick={() => requestDelete(b)}
                         className="px-2 py-1 rounded-md bg-red-50 text-red-700 hover:bg-red-100"
                         title="Delete budget"
                       >
@@ -306,6 +320,66 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
           )}
         </div>
       </div>
+
+      {/* Confirm Delete Modal */}
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="budget-delete-title"
+          onKeyDown={(e) => e.key === "Escape" && closeConfirm()}
+          onClick={closeConfirm} // click backdrop to close
+        >
+          <div
+            className="bg-white rounded-2xl shadow-lg ring-1 ring-gray-200 w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()} // prevent backdrop close when clicking content
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h4 id="budget-delete-title" className="text-lg font-semibold text-gray-900">
+                Delete budget?
+              </h4>
+              <button
+                className="p-1 rounded text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                onClick={closeConfirm}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="mt-2 text-sm text-gray-600">
+              This action cannot be undone. You’re about to delete:
+            </p>
+
+            {pendingBudget && (
+              <div className="mt-3 rounded-lg bg-gray-50 ring-1 ring-gray-200 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-700">
+                    {pendingBudget.category || "Budget"} ({pendingBudget.month || ym})
+                  </span>
+                  <span className="font-medium">₹{Number(pendingBudget.amount).toFixed(0)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

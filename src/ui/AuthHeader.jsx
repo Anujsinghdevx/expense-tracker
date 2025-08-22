@@ -1,7 +1,9 @@
 import React from "react";
 import { PlusCircle, Calendar as CalendarIcon, LogOut, UserRound } from "lucide-react";
 
+
 export default function AuthHeader({ user, selectedMonth, onMonthChange, onAddClick, onLogout }) {
+
   return (
     <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-5 sm:p-6 mb-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -18,8 +20,10 @@ export default function AuthHeader({ user, selectedMonth, onMonthChange, onAddCl
               type="month"
               value={selectedMonth}
               onChange={(e) => onMonthChange(e.target.value)}
+              max={new Date().toISOString().slice(0, 7)}  
               className="w-[9.5rem] outline-none text-gray-700 placeholder-gray-400"
             />
+
           </label>
 
           <button

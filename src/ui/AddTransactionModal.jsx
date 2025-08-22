@@ -68,10 +68,14 @@ export default function AddTransactionModal({ open, onClose, newTransaction, set
             <input
               type="date"
               value={newTransaction.date}
-              onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+              onChange={(e) =>
+                setNewTransaction({ ...newTransaction, date: e.target.value })
+              }
+              max={new Date().toISOString().split("T")[0]} 
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>
+
 
           <div className="flex gap-3 pt-4">
             <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400">
