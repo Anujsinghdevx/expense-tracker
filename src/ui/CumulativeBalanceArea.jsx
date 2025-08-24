@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Chart from "chart.js";
 
 const COLORS = {
-  posBorder: "#10B981", // emerald
+ posBorder: "#10B981",
   posFill: "rgba(16,185,129,0.25)",
-  negBorder: "#EF4444", // red
+  negBorder: "#EF4444",
   negFill: "rgba(239,68,68,0.25)",
+  grid: "rgba(30,41,59,0.08)",
+  tick: "#334155",
 };
 
 function byMonth(rows, type, year) {
@@ -50,7 +52,7 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
   const negData = useMemo(() => cum.map((v) => (v < 0 ? v : null)), [cum]);
 
   const labels = useMemo(
-    () => ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    () => ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     []
   );
 
@@ -86,7 +88,7 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
             borderColor: COLORS.posBorder,
             backgroundColor: COLORS.posFill,
             borderWidth: 2,
-            tension: 0.25,
+            tension: 0.3,
             pointRadius: 2,
             fill: true,
           },
@@ -96,7 +98,7 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
             borderColor: COLORS.negBorder,
             backgroundColor: COLORS.negFill,
             borderWidth: 2,
-            tension: 0.25,
+            tension: 0.3,
             pointRadius: 2,
             fill: true,
           },
@@ -107,7 +109,9 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { labels: { usePointStyle: true, pointStyle: "circle" } },
+          legend: {
+            labels: { usePointStyle: true, pointStyle: "circle", color: COLORS.tick, font: { weight: "500" } },
+          },
           tooltip: {
             callbacks: {
               label: (ctx) => {
@@ -120,12 +124,16 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
         scales: {
           y: {
             beginAtZero: true,
-            title: { display: true, text: "Balance (₹)" },
-            ticks: { callback: (v) => `₹${Number(v).toLocaleString("en-IN")}` },
-            grid: { drawBorder: false },
+            title: { display: true, text: "Balance (₹)", color: COLORS.tick },
+            ticks: {
+              color: COLORS.tick,
+              callback: (v) => `₹${Number(v).toLocaleString("en-IN")}`,
+            },
+            grid: { drawBorder: false, color: COLORS.grid },
           },
           x: {
-            title: { display: true, text: "Month" },
+            title: { display: true, text: "Month", color: COLORS.tick },
+            ticks: { color: COLORS.tick },
             grid: { display: false },
           },
         },
@@ -141,20 +149,22 @@ export default function CumulativeBalanceArea({ transactions = [] }) {
   }, [posData, negData, year, labels]);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+    <div className="rounded-2xl shadow-sm ring-1 ring-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Cumulative Balance</h3>
+        <h3 className="text-lg sm:text-xl font-bold text-slate-900">Cumulative Balance</h3>
         <select
           value={year}
           onChange={(e) => setYear(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+          className="px-3 py-2 border border-blue-200 rounded-lg bg-white/90 backdrop-blur text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {[...new Set([fallback, ...years])].sort().map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
       </div>
-      <div className="h-64">
+
+      <div className="h-64 bg-white/80 rounded-xl p-4 shadow-sm">
         <canvas ref={chartRef} aria-label="Cumulative Balance" />
       </div>
     </div>

@@ -1,12 +1,14 @@
-// src/ui/MonthlyExpenseLine.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as Chart from "chart.js";
 
 const COLORS = {
-  line: "#EF4444",               // red line
-  point: "#B91C1C",              // darker red point
+  line: "#EF4444",             
+  point: "#B91C1C",              
   fillTop: "rgba(239,68,68,0.25)",
   fillBottom: "rgba(239,68,68,0.02)",
+  grid: "rgba(30,41,59,0.08)",
+  tick: "#334155",
+  title: "#0f172a",
 };
 
 function formatINR(n) {
@@ -72,7 +74,6 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
 
     const ctx = chartRef.current.getContext("2d");
 
-    // Create a vertical gradient for the area fill
     const { height } = chartRef.current;
     const gradient = ctx.createLinearGradient(0, 0, 0, height || 256);
     gradient.addColorStop(0, COLORS.fillTop);
@@ -87,13 +88,14 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
             label: `Expenses (${year})`,
             data: monthlyData,
             borderColor: COLORS.line,
-            backgroundColor: gradient,   // soft red fill
+            backgroundColor: gradient,
             borderWidth: 2,
-            tension: 0.3,
+            tension: 0.35,
             pointRadius: 3,
+            pointHoverRadius: 5,
             pointBackgroundColor: COLORS.point,
             pointBorderColor: COLORS.point,
-            fill: true,                  // enable fill
+            fill: true,
           },
         ],
       },
@@ -102,7 +104,15 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { display: true, labels: { usePointStyle: true, pointStyle: "circle" } },
+          legend: {
+            display: true,
+            labels: {
+              usePointStyle: true,
+              pointStyle: "circle",
+              color: COLORS.tick,
+              font: { weight: "500" },
+            },
+          },
           tooltip: {
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${formatINR(ctx.parsed.y)}`,
@@ -113,12 +123,17 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
           y: {
             beginAtZero: true,
             ticks: {
+              color: COLORS.tick,
               callback: (v) => (Number(v) >= 1000 ? `${Math.round(v / 1000)}k` : v),
             },
-            title: { display: true, text: "Expense (₹)" },
-            grid: { drawBorder: false },
+            title: { display: true, text: "Expense (₹)", color: COLORS.tick },
+            grid: { drawBorder: false, color: COLORS.grid },
           },
-          x: { title: { display: true, text: "Month" }, grid: { display: false } },
+          x: {
+            ticks: { color: COLORS.tick },
+            title: { display: true, text: "Month", color: COLORS.tick },
+            grid: { display: false },
+          },
         },
       },
     });
@@ -131,17 +146,21 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
     };
   }, [monthlyData, labels, year]);
 
+  const totalYear = monthlyData.reduce((s, v) => s + v, 0);
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6">
+    <div className="rounded-2xl shadow-sm ring-1 ring-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Monthly Expense Trend</h3>
-      <div className="flex items-center gap-2">
-          <label htmlFor="year" className="text-sm text-gray-600">Year</label>
+        <h3 className="text-lg sm:text-xl font-bold text-slate-900">Monthly Expense Trend</h3>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="year" className="text-sm text-slate-600">Year</label>
           <select
             id="year"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+            className="px-3 py-2 border border-blue-200 rounded-lg bg-white/90 backdrop-blur text-sm
+                       focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {[...new Set([defaultYear, ...yearsInData])].sort().map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -150,12 +169,14 @@ export default function MonthlyExpenseLine({ transactions = [] }) {
         </div>
       </div>
 
-      <div className="h-64">
+      <div className="h-64 bg-white/80 rounded-xl p-4 shadow-sm">
         <canvas ref={chartRef} aria-label="Monthly expenses line chart" />
       </div>
-      <div className="mt-3 text-xs text-gray-500">
-        Total this year: <span className="font-medium">
-          {formatINR(monthlyData.reduce((s, v) => s + v, 0))}
+
+      <div className="mt-3 text-xs text-slate-600">
+        Total this year:{" "}
+        <span className="font-medium text-slate-900">
+          {formatINR(totalYear)}
         </span>
       </div>
     </div>
