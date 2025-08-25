@@ -1,24 +1,62 @@
 import React from "react";
 import { X } from "lucide-react";
 
-export default function AddTransactionModal({ open, onClose, newTransaction, setNewTransaction, categories, onSubmit }) {
+export default function AddTransactionModal({
+  open,
+  onClose,
+  newTransaction,
+  setNewTransaction,
+  categories,
+  onSubmit,
+}) {
   if (!open) return null;
+
+  // Default empty transaction
+  const initialTransaction = {
+    type: "expense",
+    amount: "",
+    category: "",
+    description: "",
+    date: new Date().toISOString().split("T")[0],
+  };
+
+  const handleSubmit = () => {
+    onSubmit(newTransaction); // pass data to parent
+    setNewTransaction(initialTransaction); // reset form
+    onClose(); // close modal
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-lg ring-1 ring-gray-200">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Add Transaction</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400" aria-label="Close modal">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+            Add Transaction
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 p-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            aria-label="Close modal"
+          >
             <X size={22} />
           </button>
         </div>
 
         <div className="space-y-4">
+          {/* Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type
+            </label>
             <select
               value={newTransaction.type}
-              onChange={(e) => setNewTransaction({ ...newTransaction, type: e.target.value, category: "" })}
+              onChange={(e) =>
+                setNewTransaction({
+                  ...newTransaction,
+                  type: e.target.value,
+                  category: "",
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
               <option value="expense">Expense</option>
@@ -26,63 +64,95 @@ export default function AddTransactionModal({ open, onClose, newTransaction, set
             </select>
           </div>
 
+          {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Amount
+            </label>
             <input
               type="number"
               step="0.01"
               value={newTransaction.amount}
-              onChange={(e) => setNewTransaction({ ...newTransaction, amount: e.target.value })}
+              onChange={(e) =>
+                setNewTransaction({
+                  ...newTransaction,
+                  amount: e.target.value,
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               placeholder="0.00"
             />
           </div>
 
+          {/* Category */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category
+            </label>
             <select
               value={newTransaction.category}
-              onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
+              onChange={(e) =>
+                setNewTransaction({
+                  ...newTransaction,
+                  category: e.target.value,
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
               <option value="">Select Category</option>
               {categories[newTransaction.type].map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
               ))}
             </select>
           </div>
 
+          {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
             <input
               type="text"
               value={newTransaction.description}
-              onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
+              onChange={(e) =>
+                setNewTransaction({
+                  ...newTransaction,
+                  description: e.target.value,
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               placeholder="Enter description"
             />
           </div>
 
+          {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Date
+            </label>
             <input
               type="date"
               value={newTransaction.date}
               onChange={(e) =>
                 setNewTransaction({ ...newTransaction, date: e.target.value })
               }
-              max={new Date().toISOString().split("T")[0]} 
+              max={new Date().toISOString().split("T")[0]}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
-
+          {/* Buttons */}
           <div className="flex gap-3 pt-4">
-            <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+            >
               Cancel
             </button>
             <button
-              onClick={onSubmit}
+              onClick={handleSubmit}
               disabled={!newTransaction.amount || !newTransaction.category}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >

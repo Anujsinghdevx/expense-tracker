@@ -14,23 +14,23 @@ import { X } from "lucide-react";
 
 function BudgetBar({ spent, limit }) {
   const pct = limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0;
-  const color = pct < 80 ? "bg-green-500" : pct < 100 ? "bg-amber-500" : "bg-red-600";
+  const color =
+    pct < 80 ? "bg-blue-500" : pct < 100 ? "bg-indigo-500" : "bg-rose-600";
   return (
     <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span>Spent</span><span>{pct}%</span>
+      <div className="flex justify-between text-sm mb-1 text-slate-600">
+        <span>Spent</span>
+        <span className="font-medium text-slate-800">{pct}%</span>
       </div>
-      <div className="h-2 rounded bg-gray-200 overflow-hidden">
+      <div className="h-2 rounded bg-blue-100 overflow-hidden">
         <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
-// Normalize categories for stable lookup
 const normalizeCat = (s) => (s || "Other Expense").trim().toLowerCase();
 
-// Format to "YYYY-MM" from selectedMonth (which can be "YYYY-MM" or Date string)
 const monthKey = (sel) => {
   if (!sel) return "";
   if (typeof sel === "string" && sel.length === 7 && sel[4] === "-") return sel;
@@ -41,29 +41,28 @@ const monthKey = (sel) => {
 };
 
 export default function BudgetPanel({ selectedMonth, user, db }) {
-  const [items, setItems] = useState([]); // budgets
+  const [items, setItems] = useState([]);
   const [form, setForm] = useState({ category: "Groceries", amount: "" });
   const [saving, setSaving] = useState(false);
 
-  // aggregated spend per normalized category for this month
-  const [spentByCategory, setSpentByCategory] = useState({}); // { [normalizedCategory]: number }
+  const [spentByCategory, setSpentByCategory] = useState({});
 
   const ym = useMemo(() => monthKey(selectedMonth), [selectedMonth]);
 
-  // JS Date boundaries for Timestamp path
   const monthStart = useMemo(() => {
     const [y, m] = ym.split("-");
-    const Y = Number(y), M = Number(m) - 1;
+    const Y = Number(y),
+      M = Number(m) - 1;
     return new Date(Y, M, 1, 0, 0, 0, 0);
   }, [ym]);
 
   const monthEndExclusive = useMemo(() => {
     const [y, m] = ym.split("-");
-    const Y = Number(y), M = Number(m) - 1;
-    return new Date(Y, M + 1, 1, 0, 0, 0, 0); // exclusive
+    const Y = Number(y),
+      M = Number(m) - 1;
+    return new Date(Y, M + 1, 1, 0, 0, 0, 0);
   }, [ym]);
 
-  // 🔄 Real-time budgets (by month string)
   useEffect(() => {
     if (!user || !ym) return;
     const qBudgets = query(
@@ -81,11 +80,9 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
     return () => unsub();
   }, [db, user, ym]);
 
-  // 🔄 Real-time transactions for the month (support Timestamp and string dates)
   useEffect(() => {
     if (!user || !ym) return;
 
-    // --- Listener A: Timestamp range ---
     const qTs = query(
       collection(db, "transactions"),
       where("userId", "==", user.uid),
@@ -94,7 +91,6 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
       where("date", "<", Timestamp.fromDate(monthEndExclusive))
     );
 
-    // --- Listener B: String "YYYY-MM-DD" range (lexicographic) ---
     const qStr = query(
       collection(db, "transactions"),
       where("userId", "==", user.uid),
@@ -171,7 +167,9 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
 
     setSaving(true);
     try {
-      const existing = items.find((i) => i.category === form.category && i.month === ym);
+      const existing = items.find(
+        (i) => i.category === form.category && i.month === ym
+      );
 
       if (existing) {
         const ref = doc(db, "budgets", existing.id);
@@ -179,8 +177,8 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
       } else {
         await addDoc(collection(db, "budgets"), {
           userId: user.uid,
-          month: ym, // store canonical "YYYY-MM"
-          category: form.category, // keep human-readable; normalize only for lookups
+          month: ym,
+          category: form.category,
           amount: amountNum,
         });
       }
@@ -190,9 +188,8 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
     }
   };
 
-  // ===== Confirm Modal state/handlers (like your TransactionsTable) =====
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingBudget, setPendingBudget] = useState(null); // { id, category, amount, month }
+  const [pendingBudget, setPendingBudget] = useState(null);
 
   const requestDelete = useCallback((b) => {
     setPendingBudget(b);
@@ -223,22 +220,32 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
   ];
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-200 p-6 mb-6">
+    <section className="rounded-2xl shadow-sm ring-1 ring-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+        <h3 className="text-lg sm:text-xl font-bold text-slate-900">
           Budgets (
-          {new Date(`${ym}-01`).toLocaleString("en-US", { month: "long", year: "numeric" })})
+          {new Date(`${ym}-01`).toLocaleString("en-US", {
+            month: "long",
+            year: "numeric",
+          })}
+          )
         </h3>
-        <div className="text-sm text-gray-600 flex gap-4">
+        <div className="text-sm text-slate-600 flex flex-wrap gap-3">
           <span>
-            Total budget: <span className="font-medium">₹{totalBudget.toFixed(0)}</span>
+            Total budget:{" "}
+            <span className="font-medium text-slate-900">
+              ₹{totalBudget.toFixed(0)}
+            </span>
           </span>
           <span>
-            Spent: <span className="font-medium">₹{totalSpent.toFixed(0)}</span>
+            Spent:{" "}
+            <span className="font-medium text-slate-900">
+              ₹{totalSpent.toFixed(0)}
+            </span>
           </span>
           <span>
             Left:{" "}
-            <span className="font-medium">
+            <span className="font-medium text-slate-900">
               ₹{Math.max(0, totalBudget - totalSpent).toFixed(0)}
             </span>
           </span>
@@ -247,14 +254,22 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Add / Update budget */}
-        <form onSubmit={onSubmit} className="rounded-xl ring-1 ring-gray-200 p-4">
+        <form
+          onSubmit={onSubmit}
+          className="rounded-xl ring-1 ring-blue-100 bg-white/80 backdrop-blur p-4 shadow-sm"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="sr-only" htmlFor="budgetCategory">Budget category</label>
+            <label className="sr-only" htmlFor="budgetCategory">
+              Budget category
+            </label>
             <select
               id="budgetCategory"
               value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, category: e.target.value }))
+              }
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white/90 backdrop-blur text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
               {categories.map((c) => (
                 <option key={c} value={c}>
@@ -263,7 +278,9 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               ))}
             </select>
 
-            <label className="sr-only" htmlFor="budgetAmount">Amount</label>
+            <label className="sr-only" htmlFor="budgetAmount">
+              Amount
+            </label>
             <input
               id="budgetAmount"
               type="number"
@@ -271,15 +288,19 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               min="1"
               placeholder="Amount (₹)"
               value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
+              onChange={(e) =>
+                setForm((f) => ({ ...f, amount: e.target.value }))
+              }
+              className="px-3 py-2 border border-blue-200 rounded-lg bg-white/90 backdrop-blur text-sm
+                         focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
 
             <button
               disabled={saving}
-              className={`px-4 py-2 text-white rounded-lg text-sm ${
-                saving ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              className={`px-4 py-2 text-white rounded-lg text-sm transition
+                ${saving
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"}`}
             >
               {saving ? "Saving..." : "Add / Update"}
             </button>
@@ -294,17 +315,20 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               const limit = Number(b.amount || 0);
               const left = Math.max(0, limit - spent);
               return (
-                <div key={b.id} className="rounded-xl ring-1 ring-gray-200 p-4">
+                <div
+                  key={b.id}
+                  className="rounded-xl ring-1 ring-blue-100 bg-white/80 backdrop-blur p-4 shadow-sm"
+                >
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <div className="font-medium">{b.category}</div>
+                    <div className="font-medium text-slate-900">{b.category}</div>
                     <div className="flex items-center gap-3">
-                      <span>
+                      <span className="text-slate-800">
                         ₹{spent.toFixed(0)} / ₹{limit.toFixed(0)}{" "}
-                        <span className="text-gray-500">· Left ₹{left.toFixed(0)}</span>
+                        <span className="text-slate-500">· Left ₹{left.toFixed(0)}</span>
                       </span>
                       <button
                         onClick={() => requestDelete(b)}
-                        className="px-2 py-1 rounded-md bg-red-50 text-red-700 hover:bg-red-100"
+                        className="px-2 py-1 rounded-md bg-rose-50 text-rose-700 hover:bg-rose-100"
                         title="Delete budget"
                       >
                         Delete
@@ -316,7 +340,7 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               );
             })
           ) : (
-            <div className="text-sm text-gray-500">No budgets set for this month.</div>
+            <div className="text-sm text-slate-600">No budgets set for this month.</div>
           )}
         </div>
       </div>
@@ -329,18 +353,18 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
           aria-modal="true"
           aria-labelledby="budget-delete-title"
           onKeyDown={(e) => e.key === "Escape" && closeConfirm()}
-          onClick={closeConfirm} // click backdrop to close
+          onClick={closeConfirm}
         >
           <div
-            className="bg-white rounded-2xl shadow-lg ring-1 ring-gray-200 w-full max-w-md p-5"
-            onClick={(e) => e.stopPropagation()} // prevent backdrop close when clicking content
+            className="bg-white rounded-2xl shadow-lg ring-1 ring-blue-100 w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
-              <h4 id="budget-delete-title" className="text-lg font-semibold text-gray-900">
+              <h4 id="budget-delete-title" className="text-lg font-semibold text-slate-900">
                 Delete budget?
               </h4>
               <button
-                className="p-1 rounded text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                className="p-1 rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                 onClick={closeConfirm}
                 aria-label="Close"
               >
@@ -348,17 +372,19 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
               </button>
             </div>
 
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-slate-600">
               This action cannot be undone. You’re about to delete:
             </p>
 
             {pendingBudget && (
-              <div className="mt-3 rounded-lg bg-gray-50 ring-1 ring-gray-200 p-3 text-sm">
+              <div className="mt-3 rounded-lg bg-slate-50 ring-1 ring-blue-100 p-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-700">
+                  <span className="text-slate-700">
                     {pendingBudget.category || "Budget"} ({pendingBudget.month || ym})
                   </span>
-                  <span className="font-medium">₹{Number(pendingBudget.amount).toFixed(0)}</span>
+                  <span className="font-medium text-slate-900">
+                    ₹{Number(pendingBudget.amount).toFixed(0)}
+                  </span>
                 </div>
               </div>
             )}
@@ -366,13 +392,13 @@ export default function BudgetPanel({ selectedMonth, user, db }) {
             <div className="mt-5 flex gap-3">
               <button
                 onClick={closeConfirm}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                className="flex-1 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
               >
                 Delete
               </button>
