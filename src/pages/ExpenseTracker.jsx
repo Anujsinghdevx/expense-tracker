@@ -16,7 +16,6 @@ import CumulativeBalanceArea from "../ui/CumulativeBalanceArea";
 import BudgetPanel from "../ui/BudgetPanel";
 import CSVImportModal from "../ui/CSVImportModal";
 import FilterBar from "../ui/FilterBar";
-import MobileActionBar from "../ui/MobileActionBar";
 import { processRecurringForUser } from "../utils/recurring";
 import { ensureOnlineThenProcessQueue, queueAdd, queueDelete } from "../utils/offlineQueue";
 
@@ -236,7 +235,7 @@ export default function ExpenseTracker() {
     }, [undo]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pb-16">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             {user ? (
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <AuthHeader
@@ -334,9 +333,6 @@ export default function ExpenseTracker() {
                             onAction={undoDelete}
                         />
                     )}
-
-
-                    <MobileActionBar onAdd={() => setShowAddModal(true)} onImport={() => setShowImport(true)} />
                 </div>
             ) : (
                 <LoggedOut onGoogleLogin={loginWithGoogle} />
