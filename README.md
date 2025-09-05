@@ -1,70 +1,195 @@
-# Getting Started with Create React App
+# 💰 Expense Tracker – React + Firebase
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+[![React](https://img.shields.io/badge/React-19.0.0-blue.svg?logo=react)](https://react.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-12-orange.svg?logo=firebase)](https://firebase.google.com/)
+[![Chart.js](https://img.shields.io/badge/Chart.js-4.5.0-red.svg?logo=chartdotjs)](https://www.chartjs.org/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.0-38B2AC.svg?logo=tailwindcss)](https://tailwindcss.com/)
 
-## Available Scripts
+**Expense Tracker** is a modern, offline-friendly financial management app with Google login, Firestore persistence, recurring transactions, CSV import, and rich chart visualizations.
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## 🚀 Live Demo
+👉 [https://expense-tracker-six-beta-78.vercel.app/](https://expense-tracker-six-beta-78.vercel.app/)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## ✨ Features
+- 🔐 Google login with Firebase Authentication  
+- ☁️ Firestore persistence (`transactions` collection)  
+- ⚡ Optimistic UI for add/delete with undo  
+- 📡 Offline-first: queue writes with IndexedDB and sync when online  
+- 🔁 Recurring transactions auto-generated per user  
+- 📥 CSV import for bulk uploads  
+- 🔎 Advanced filtering (month, category, tags, search, ranges, dates)  
+- 📊 Insights & charts: category breakdown, monthly spend line, income vs expense, cumulative balance  
+- 💰 Monthly budget panel  
+- 🎨 Responsive UI powered by TailwindCSS  
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 📂 Project Structure
+```
+EXPENSE-TRACKER/
+├── public/                 
+│   ├── favicon.ico
+│   ├── index.html
+│   ├── manifest.json
+│   └── sw.js
+│
+├── src/
+│   ├── pages/
+│   │   └── ExpenseTracker.jsx      
+│   ├── ui/                          
+│   │   ├── AddTransactionModal.jsx
+│   │   ├── AuthHeader.jsx
+│   │   ├── BudgetPanel.jsx
+│   │   ├── CSVImportModal.jsx
+│   │   ├── CumulativeBalanceArea.jsx
+│   │   ├── ExpenseBreakdown.jsx
+│   │   ├── FilterBar.jsx
+│   │   ├── IncomeExpenseCombo.jsx
+│   │   ├── InsightsPanel.jsx
+│   │   ├── LoggedOut.jsx
+│   │   ├── MonthlyExpenseLine.jsx
+│   │   ├── SummaryCards.jsx
+│   │   ├── TransactionsTable.jsx
+│   │   └── UndoToast.jsx
+│   ├── utils/
+│   │   ├── exporters.js
+│   │   ├── offlineQueue.js
+│   │   └── recurring.js
+│   ├── firebase.js
+│   ├── firebaseConfig.js
+│   ├── App.js / App.css
+│   ├── index.js / index.css
+│   └── setupTests.js
+│
+├── .env
+├── package.json
+├── tailwind.config.js
+└── README.md
+```
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## 🧱 Tech Stack
+- React 19  
+- Firebase 12 (Auth + Firestore)  
+- Chart.js 4 + react-chartjs-2  
+- idb-keyval 6 for offline queue  
+- Tailwind CSS 3  
+- React Testing Library + Jest DOM  
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+---
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## ⚡ Getting Started
 
-### `npm run eject`
+### 1️⃣ Clone & Install
+```bash
+git clone https://github.com/your-username/expense-tracker.git
+cd expense-tracker
+npm install
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 2️⃣ Firebase Setup
+- Create a Firebase project  
+- Enable **Google Sign-In**  
+- Enable **Cloud Firestore**  
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 3️⃣ Configure Firebase (`src/firebase.js`)
+```js
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+const firebaseConfig = {
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+};
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const provider = new GoogleAuthProvider();
+export const db = getFirestore(app);
+```
 
-## Learn More
+### 4️⃣ Environment Variables (`.env`)
+```
+REACT_APP_FIREBASE_API_KEY=your_api_key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your_project_id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=sender_id
+REACT_APP_FIREBASE_APP_ID=app_id
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### 5️⃣ Run Locally
+```bash
+npm start
+```
+➡️ App runs at [http://localhost:3000](http://localhost:3000)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 6️⃣ Build for Production
+```bash
+npm run build
+```
 
-### Code Splitting
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🔐 Firestore Rules (Example)
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /transactions/{id} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+    }
+  }
+}
+```
 
-### Analyzing the Bundle Size
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 📥 CSV Import Format
+| Column       | Type          | Required | Notes                              |
+|--------------|--------------|----------|-----------------------------------|
+| type         | string       | ✅       | `income` or `expense`             |
+| amount       | number       | ✅       | Transaction amount                 |
+| category     | string       | ✅       | Category name                      |
+| description  | string       | ❌       | Optional                           |
+| date         | YYYY-MM-DD   | ❌       | Defaults to today if missing       |
+| tags         | array/string | ❌       | e.g. `food;office` or `["food"]`  |
 
-### Making a Progressive Web App
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## 📦 NPM Scripts
+| Command            | Description             |
+|--------------------|-------------------------|
+| `npm start`        | Run dev server          |
+| `npm run build`    | Create production build |
+| `npm test`         | Run tests               |
+| `npm run eject`    | Eject CRA config        |
+| `npm run tailwind` | Use Tailwind CLI        |
 
-### Advanced Configuration
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## 🗺️ Roadmap
+- [ ] Edit / Update transactions  
+- [ ] Recurring rule editor UI  
+- [ ] Multi-currency support  
+- [ ] Export to CSV  
+- [ ] PWA with offline usage  
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## 👨‍💻 Developer
+**Anuj Singh**  
+[![GitHub](https://img.shields.io/badge/GitHub-@anujsinhgdevx-181717?style=flat&logo=github)](https://github.com/anujsinghdevx)  
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-anujsinghdevx-blue?style=flat&logo=linkedin)](https://linkedin.com/in/anujsinghdevx)
 
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
